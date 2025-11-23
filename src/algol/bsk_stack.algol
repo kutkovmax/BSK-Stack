@@ -1,0 +1,29 @@
+BEGIN
+  MODE Node = STRUCT(CHAR color; INT val);
+  REF VECTOR(Node) data := NIL;
+  REAL whiteRatio := 0.3; REAL blueRatio := 0.4;
+
+  PROC push = (INT v) VOID:
+    IF data = NIL THEN data := VAL VECTOR(Node)[0] FI;
+    data := (NODE('W', v) | data)  # prepend
+  ;
+
+  PROC zones = (INT n) (INT w, INT b):
+    w := INT(n * whiteRatio);
+    b := INT(n * (whiteRatio + blueRatio))
+  ;
+
+  PROC pop = (REF VECTOR(Node) d) INT:
+    INT n := UPB d + 1;
+    INT w, b; zones(n) (w,b);
+    FOR i FROM 0 TO n-1 DO
+      IF i < w AND (d[i].color = 'W' OR d[i].color='B') THEN
+         INT val := d[i].val;
+         # remove element i: left as exercise
+         RETURN val
+      FI
+    OD;
+    # red locked
+    ABORT("Red zone locked")
+  ;
+END
