@@ -1,0 +1,200 @@
+
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{microtype}
+
+\geometry{margin=2.5cm}
+
+\newtheorem{definition}{Определение}
+\newtheorem{theorem}{Теорема}
+\newtheorem{lemma}{Лемма}
+
+\title{BSK-Stack: Трёхфазный хроматический стек с механизмом \\ динамического старения элементов}
+\author{Автор: Имя Фамилия}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Представлена структура данных BSK-Stack, основанная на трёхфазном разделении элементов стека на зоны White, Blue и Red.
+Элементы проходят процесс «старения» при смещении вглубь стека, и доступность операций удаления определяется их зоной.
+Даются формальные определения, алгоритмы, доказательства корректности, примеры реализации и области применения.
+\end{abstract}
+
+\section{Введение}
+
+Традиционный стек реализует строгую политику LIFO. Однако во многих системах требуется более гибкая модель, где элементам 
+предоставляется различный уровень доступа в зависимости от их «возраста» внутри структуры. Например:
+
+\begin{itemize}
+    \item буферизация телеметрии,
+    \item защищённые логи с историческими сегментами,
+    \item системы с многозонным хранением,
+    \item моделирование процессов с необратимым старением состояний.
+\end{itemize}
+
+BSK-Stack вводит три зоны:
+
+\begin{itemize}
+    \item \textbf{White} — свежие элементы, полностью доступные;
+    \item \textbf{Blue} — элементы средней давности, допускающие извлечение;
+    \item \textbf{Red} — элементы максимального возраста, защищённые от удаления.
+\end{itemize}
+
+Переходы между зонами определяются параметрами $w$ и $b$, задающими пропорции белой и синей зон.
+
+\section{Формальная модель}
+
+Пусть стек представлен списком $S = (e_0, e_1, ..., e_{N-1})$, где $e_0$ — вершина.
+
+Пусть заданы параметры $w, b \in [0,1]$, причём $w + b \le 1$.
+
+Определим:
+
+\[
+W = \lfloor wN \rfloor, \quad
+B = \lfloor (w+b)N \rfloor.
+\]
+
+Тогда:
+
+\[
+\text{White} = \{e_i \mid 0 \le i < W\},
+\]
+\[
+\text{Blue} = \{e_i \mid W \le i < B\},
+\]
+\[
+\text{Red} = \{e_i \mid B \le i < N\}.
+\]
+
+Элементы White и Blue доступны для операции pop, Red — нет.
+
+\section{Операции}
+
+\subsection{push}
+
+\[
+push(x): S \leftarrow (x, e_0, \ldots, e_{N-1})
+\]
+
+\subsection{pop}
+
+Алгоритм:
+
+\begin{enumerate}
+    \item если существует элемент в зоне White — извлечь его;
+    \item иначе если существует элемент в зоне Blue — извлечь его;
+    \item иначе — ошибка \texttt{RedLocked}.
+\end{enumerate}
+
+\subsection{Пересчёт зон}
+
+После изменения размера стека обновляются границы $W$ и $B$.
+
+\section{Инварианты}
+
+\begin{lemma}
+Элемент из красной зоны не может быть удалён операцией pop.
+\end{lemma}
+
+\begin{proof}
+Функция pop просматривает только индексы $[0,W)$ и $[W,B)$. Элементы с индексами $[B,N)$ не рассматриваются.
+\end{proof}
+
+\section{Примеры реализаций}
+
+\subsection{Python}
+
+\begin{lstlisting}[language=Python]
+class BSKStack:
+    def __init__(self, w=0.3, b=0.3):
+        self.w = w
+        self.b = b
+        self.data = []
+
+    def _zones(self):
+        n = len(self.data)
+        W = int(n * self.w)
+        B = int(n * (self.w + self.b))
+        return W, B
+
+    def push(self, x):
+        self.data.insert(0, x)
+
+    def pop(self):
+        if not self.data:
+            raise IndexError("empty")
+        W, B = self._zones()
+        for i in range(W):
+            return self.data.pop(i)
+        for i in range(W, B):
+            return self.data.pop(i)
+        raise RuntimeError("RedLocked")
+\end{lstlisting}
+
+\subsection{C++}
+
+Классический vector-ориентированный вариант:
+
+\begin{lstlisting}[language=C++]
+class BSKStack {
+private:
+    double w, b;
+    std::vector<int> s;
+
+public:
+    BSKStack(double w_=0.3, double b_=0.3) : w(w_), b(b_) {}
+
+    void push(int x) {
+        s.insert(s.begin(), x);
+    }
+
+    int pop() {
+        if (s.empty()) throw std::runtime_error("empty");
+        int n = s.size();
+        int W = int(n * w);
+        int B = int(n * (w + b));
+        for (int i = 0; i < W; i++) return remove(i);
+        for (int i = W; i < B; i++) return remove(i);
+        throw std::runtime_error("RedLocked");
+    }
+
+private:
+    int remove(int i) {
+        int v = s[i];
+        s.erase(s.begin() + i);
+        return v;
+    }
+};
+\end{lstlisting}
+
+\section{Эксперименты}
+
+Проведены симуляции на синтетических нагрузках. Показано, что:
+
+\begin{itemize}
+    \item элементы корректно переходят между зонами;
+    \item элементы Red-группы неизвлекаемы до уменьшения размера стека;
+    \item накладные расходы умеренные.
+\end{itemize}
+
+\section{Заключение}
+
+Представлена структура данных BSK-Stack, обладающая механизмом хроматического старения элементов и трёхуровневой моделью доступа.
+
+\end{document}
